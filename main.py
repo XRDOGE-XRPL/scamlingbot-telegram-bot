@@ -1283,6 +1283,7 @@ def main():
     from moderation import spam_filter
     from analytics_dashboard import analytics_dashboard_handler
     from ai_chat import ai_chat_start, ai_chat_handler, ai_chat_cancel
+    from ai_media import bild_command, video_command
 
     # --- Conversation Handlers (müssen zuerst registriert werden) ---
     
@@ -1392,6 +1393,8 @@ def main():
         },
         fallbacks=[CommandHandler('cancel', ai_chat_cancel)]
     )
+    application.add_handler(CommandHandler('bild', bild_command))
+    application.add_handler(CommandHandler('video', video_command))
 
     wallet_conv = ConversationHandler(
         entry_points=[
