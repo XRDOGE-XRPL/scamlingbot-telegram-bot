@@ -151,76 +151,107 @@ class States:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    # Hier übergeben wir den Benutzernamen und Vor-/Nachnamen an add_user_to_db
-    add_user_to_db(user.id, user.username, user.first_name, user.last_name) 
-    lang = get_user_language_from_db(user.id)
-    context.user_data['lang'] = lang
-    await update.message.reply_text(
-        await T("welcome", context, name=user.first_name),
-        reply_markup=await get_main_menu_keyboard(context)
-    )
+    try:
+        add_user_to_db(user.id, user.username, user.first_name, user.last_name) 
+        lang = get_user_language_from_db(user.id)
+        context.user_data['lang'] = lang
+        await update.message.reply_text(
+            await T("welcome", context, name=user.first_name),
+            reply_markup=await get_main_menu_keyboard(context)
+        )
+    except Exception as e:
+        logger.error(f"Error in start_command: {e}")
+        await update.message.reply_text("Ein Fehler ist aufgetreten. Bitte versuche es später erneut.")
     return ConversationHandler.END
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = (f"**{await T("help_title", context)}**\n\n{await T("help_body", context)}\n\n"
-                 f"- **{await T("menu_earn_money", context)}:** Krypto-Tools, Bilder-Verkauf (WIP).\n"
-                 f"- **{await T("menu_ai_chat", context)}:** Direkter Chat mit einer simulierten KI.\n"
-                 f"- **{await T("menu_tools", context)}:** Wetter, Rechner und das Crypto-Spiel.\n"
-                 f"- **{await T("menu_dashboard", context)}:** Verwalte deine Wallets und Mining-Pools.\n"
-                 f"- **{await T("menu_marketplace", context)}:** Kaufe und verkaufe digitale Güter.\n\n" # NEU
-                 "Benutze `/feedback`, um eine Nachricht an den Admin zu senden oder `/cancel`, um Aktionen abzubreichen.")
+    try:
+        help_text = (f"**{await T('help_title', context)}**\n\n{await T('help_body', context)}\n\n"
+                     f"- **{await T('menu_earn_money', context)}:** Krypto-Tools, Bilder-Verkauf (WIP).\n"
+                     f"- **{await T('menu_ai_chat', context)}:** Direkter Chat mit einer simulierten KI.\n"
+                     f"- **{await T('menu_tools', context)}:** Wetter, Rechner und das Crypto-Spiel.\n"
+                     f"- **{await T('menu_dashboard', context)}:** Verwalte deine Wallets und Mining-Pools.\n"
+                     f"- **{await T('menu_marketplace', context)}:** Kaufe und verkaufe digitale Güter.\n\n" # NEU
+                     "Benutze `/feedback`, um eine Nachricht an den Admin zu senden oder `/cancel`, um Aktionen abzubrechen.")
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=await get_main_menu_keyboard(context))
+        else:
+            await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=await get_main_menu_keyboard(context))
+    except Exception as e:
+        logger.error(f"Error in help_command: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_main_menu_keyboard(context))
+        else:
+            await update.message.reply_text("Ein Fehler ist aufgetreten.")
     
-    if update.callback_query:
-        await update.callback_query.edit_message_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=await get_main_menu_keyboard(context))
-    else:
-        await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=await get_main_menu_keyboard(context))
-
 async def language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Deutsch 🇩🇪", callback_data='set_lang_de')],
-        [InlineKeyboardButton("English 🇬🇧", callback_data='set_lang_en')],
-    ])
-    await query.edit_message_text(await T("select_language", context), reply_markup=keyboard)
+    try:
+        query = update.callback_query
+        await query.answer()
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Deutsch 🇩🇪", callback_data='set_lang_de')],
+            [InlineKeyboardButton("English 🇬🇧", callback_data='set_lang_en')],
+        ])
+        await query.edit_message_text(await T("select_language", context), reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Error in language_menu: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_main_menu_keyboard(context))
 
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    lang_code = query.data.split('_')[-1]
-    context.user_data['lang'] = lang_code
-    set_user_language(query.from_user.id, lang_code)
-    await query.answer(await T("language_set", context))
-    await query.edit_message_text(
-        await T("welcome", context, name=query.from_user.first_name),
-        reply_markup=await get_main_menu_keyboard(context)
-    )
+    try:
+        query = update.callback_query
+        lang_code = query.data.split('_')[-1]
+        context.user_data['lang'] = lang_code
+        set_user_language(query.from_user.id, lang_code)
+        await query.answer(await T("language_set", context))
+        await query.edit_message_text(
+            await T("welcome", context, name=query.from_user.first_name),
+            reply_markup=await get_main_menu_keyboard(context)
+        )
+    except Exception as e:
+        logger.error(f"Error in set_language: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_main_menu_keyboard(context))
 
 async def feedback_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(await T("feedback_prompt", context))
+    try:
+        await update.message.reply_text(await T("feedback_prompt", context))
+    except Exception as e:
+        logger.error(f"Error in feedback_start: {e}")
+        await update.message.reply_text("Ein Fehler ist aufgetreten. Bitte versuche es später erneut.")
     return States.FEEDBACK_MESSAGE
 
 async def feedback_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     feedback_text = update.message.text
-    add_feedback(user.id, user.username or user.first_name, feedback_text)
-    await update.message.reply_text(await T("feedback_thanks", context))
-    admin_notification = await T("admin_feedback_notification", context, user=user.full_name, text=feedback_text)
     try:
-        await context.bot.send_message(chat_id=ADMIN_USER_ID, text=admin_notification, parse_mode=ParseMode.MARKDOWN)
+        add_feedback(user.id, user.username or user.first_name, feedback_text)
+        await update.message.reply_text(await T("feedback_thanks", context))
+        admin_notification = await T("admin_feedback_notification", context, user=user.full_name, text=feedback_text)
+        try:
+            await context.bot.send_message(chat_id=ADMIN_USER_ID, text=admin_notification, parse_mode=ParseMode.MARKDOWN)
+        except Exception as e:
+            logger.error(f"Could not send feedback notification to admin: {e}")
     except Exception as e:
-        logger.error(f"Could not send feedback notification to admin: {e}")
+        logger.error(f"Error in feedback_message_handler: {e}")
+        await update.message.reply_text("Ein Fehler ist aufgetreten. Bitte versuche es später erneut.")
     return ConversationHandler.END
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"User {update.effective_user.id} cancelled a conversation.")
-    await update.message.reply_text(
-        "Aktion abgebrochen.",
-        reply_markup=await get_main_menu_keyboard(context)
-    )
-    # Clear any conversation-related user_data
-    for key in list(context.user_data.keys()):
-        if key.startswith(('game_', 'calc_', 'wallet_', 'pool_', 'xrpl_', 'marketplace_')): # NEU: 'marketplace_'
-            del context.user_data[key]
+    try:
+        logger.info(f"User {update.effective_user.id} cancelled a conversation.")
+        await update.message.reply_text(
+            "Aktion abgebrochen.",
+            reply_markup=await get_main_menu_keyboard(context)
+        )
+        # Clear any conversation-related user_data
+        for key in list(context.user_data.keys()):
+            if key.startswith(('game_', 'calc_', 'wallet_', 'pool_', 'xrpl_', 'marketplace_')): # NEU: 'marketplace_'
+                del context.user_data[key]
+    except Exception as e:
+        logger.error(f"Error in cancel_command: {e}")
     return ConversationHandler.END
 
 # --- 6.2 KI Chat Handler ---
