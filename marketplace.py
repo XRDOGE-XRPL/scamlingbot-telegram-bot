@@ -21,129 +21,292 @@ logger = logging.getLogger(__name__)
 from main import States
 
 async def marketplace_menu_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text(
-        await context.bot_data['T']("marketplace_title", context),
-        reply_markup=await get_marketplace_menu_keyboard(context)
-    )
+    try:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(
+            await context.bot_data['T']("marketplace_title", context),
+            reply_markup=await get_marketplace_menu_keyboard(context)
+        )
+    except Exception as e:
+        logger.error(f"Error in marketplace_menu_view: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
 
 async def marketplace_filter_category_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    category = query.data.split('_', 2)[-1]
-    if category == 'All':
-        context.user_data.pop('marketplace_filter_category', None)
-    else:
-        context.user_data['marketplace_filter_category'] = category
-    # Refresh product list with new filter
-    await list_products(update, context)
+    try:
+        query = update.callback_query
+        await query.answer()
+        category = query.data.split('_', 2)[-1]
+        if category == 'All':
+            context.user_data.pop('marketplace_filter_category', None)
+        else:
+            context.user_data['marketplace_filter_category'] = category
+        # Refresh product list with new filter
+        await list_products(update, context)
+    except Exception as e:
+        logger.error(f"Error in marketplace_filter_category_handler: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
 
 async def list_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    category = context.user_data.get('marketplace_filter_category')
-    products = get_all_active_products(category)
-    if not products:
-        await query.edit_message_text("Keine Produkte gefunden.", reply_markup=await get_marketplace_menu_keyboard(context))
-        return
-    text = "Verfügbare Produkte:\n\n"
-    keyboard_buttons = []
-    for p_id, seller_id, name, description, price, currency, file_path, status in products:
-        text += f"▪️ {name} ({price:.2f} {currency})\n"
-        keyboard_buttons.append([InlineKeyboardButton(name, callback_data=f"view_product_{p_id}")])
-    keyboard_buttons.append([InlineKeyboardButton("Zurück", callback_data="marketplace_menu")])
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard_buttons))
+    try:
+        query = update.callback_query
+        await query.answer()
+        category = context.user_data.get('marketplace_filter_category')
+        products = get_all_active_products(category)
+        if not products:
+            await query.edit_message_text("Keine Produkte gefunden.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return
+        text = "Verfügbare Produkte:\n\n"
+        keyboard_buttons = []
+        for p_id, seller_id, name, description, price, currency, file_path, status in products:
+            text += f"▪️ {name} ({price:.2f} {currency})\n"
+            keyboard_buttons.append([InlineKeyboardButton(name, callback_data=f"view_product_{p_id}")])
+        keyboard_buttons.append([InlineKeyboardButton("Zurück", callback_data="marketplace_menu")])
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard_buttons))
+    except Exception as e:
+        logger.error(f"Error in list_products: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
 
 async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    product_id = int(query.data.split('_')[-1])
-    product = get_product_by_id(product_id)
+    try:
+        query = update.callback_query
+        await query.answer()
+        product_id = int(query.data.split('_')[-1])
+        product = get_product_by_id(product_id)
 
-    if not product:
-        await query.edit_message_text("Produkt nicht gefunden oder nicht verfügbar.", reply_markup=await get_marketplace_menu_keyboard(context))
-        return
+        if not product:
+            await query.edit_message_text("Produkt nicht gefunden oder nicht verfügbar.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return
 
-    p_id, seller_id, name, description, price, currency, file_path, status = product
+        p_id, seller_id, name, description, price, currency, file_path, status = product
 
-    fee_amount = price * 0.01
-    total_price = price + fee_amount
+        fee_amount = price * 0.01
+        total_price = price + fee_amount
 
-    product_text = (
-        f"**{name}**\n\n"
-        f"Beschreibung: {description}\n"
-        f"Preis: {price:.2f} {currency}\n"
-        f"Gebühr: {fee_amount:.2f} {currency} (1%)\n"
-        f"Gesamtpreis: {total_price:.2f} {currency}\n\n"
-        f"Verkäufer: Nutzer {seller_id}\n"
-    )
+        product_text = (
+            f"**{name}**\n\n"
+            f"Beschreibung: {description}\n"
+            f"Preis: {price:.2f} {currency}\n"
+            f"Gebühr: {fee_amount:.2f} {currency} (1%)\n"
+            f"Gesamtpreis: {total_price:.2f} {currency}\n\n"
+            f"Verkäufer: Nutzer {seller_id}\n"
+        )
 
-    if query.from_user.id == seller_id:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Dein Produkt", callback_data='ignore')],
-            [InlineKeyboardButton("Zurück", callback_data='marketplace_view_products')]
-        ])
-    else:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"Kaufen für {total_price:.2f} {currency}", callback_data=f"buy_product_confirm_{p_id}")],
-            [InlineKeyboardButton("Zurück", callback_data='marketplace_view_products')]
-        ])
+        if query.from_user.id == seller_id:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Dein Produkt", callback_data='ignore')],
+                [InlineKeyboardButton("Zurück", callback_data='marketplace_view_products')]
+            ])
+        else:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"Kaufen für {total_price:.2f} {currency}", callback_data=f"buy_product_confirm_{p_id}")],
+                [InlineKeyboardButton("Zurück", callback_data='marketplace_view_products')]
+            ])
 
-    context.user_data['marketplace_selected_product_id'] = p_id
-    await query.edit_message_text(product_text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+        context.user_data['marketplace_selected_product_id'] = p_id
+        await query.edit_message_text(product_text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Error in view_product: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
 
 async def confirm_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    product_id = int(query.data.split('_')[-1])
+    try:
+        query = update.callback_query
+        await query.answer()
+        product_id = int(query.data.split('_')[-1])
 
-    product = get_product_by_id(product_id)
-    if not product:
-        await query.edit_message_text("Produkt nicht gefunden oder nicht verfügbar.", reply_markup=await get_marketplace_menu_keyboard(context))
+        product = get_product_by_id(product_id)
+        if not product:
+            await query.edit_message_text("Produkt nicht gefunden oder nicht verfügbar.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return ConversationHandler.END
+
+        p_id, seller_id, name, description, price, currency, file_path, status = product
+
+        if query.from_user.id == seller_id:
+            await query.edit_message_text("Du kannst dein eigenes Produkt nicht kaufen.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return ConversationHandler.END
+
+        buyer_id = query.from_user.id
+        buyer_balance = get_user_internal_balance(buyer_id)
+        fee_amount = price * 0.01
+        total_price = price + fee_amount
+
+        if buyer_balance < total_price:
+            await query.edit_message_text(f"Unzureichendes Guthaben! Dein Guthaben: {buyer_balance:.2f} SCAMCOIN. Benötigt: {total_price:.2f} SCAMCOIN.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return ConversationHandler.END
+
+        success = process_transaction(
+            product_id=p_id,
+            buyer_id=buyer_id,
+            seller_id=seller_id,
+            price=price,
+            fee_percentage=0.01
+        )
+
+        if success:
+            try:
+                await context.bot.send_document(chat_id=buyer_id, document=file_path, caption=f"Dein Kauf: {name}")
+                await query.edit_message_text(f"✅ Du hast '{name}' erfolgreich gekauft für {total_price:.2f} {currency}.", reply_markup=await get_marketplace_menu_keyboard(context))
+                # Notify seller about the sale
+                await context.bot.send_message(chat_id=seller_id, text=f"🎉 Dein Produkt '{name}' wurde verkauft! Du hast {price * 0.99:.2f} {currency} erhalten.")
+                # Log affiliate sale if affiliate referrer exists
+                affiliate_referrer = context.user_data.get('affiliate_referrer')
+                if affiliate_referrer:
+                    from affiliate_tracking import log_affiliate_sale
+                    log_affiliate_sale(affiliate_referrer, name, price)
+            except Exception as e:
+                logger.error(f"Fehler beim Senden der Datei an Nutzer {buyer_id}: {e}")
+                await query.edit_message_text(f"✅ Du hast '{name}' gekauft, aber es gab ein Problem bei der Zustellung der Datei.", reply_markup=await get_marketplace_menu_keyboard(context))
+        else:
+            await query.edit_message_text("Kauf fehlgeschlagen. Bitte versuche es später erneut.", reply_markup=await get_marketplace_menu_keyboard(context))
+
         return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error in confirm_buy: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
 
-    p_id, seller_id, name, description, price, currency, file_path, status = product
+async def marketplace_filter_category_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        category = query.data.split('_', 2)[-1]
+        if category == 'All':
+            context.user_data.pop('marketplace_filter_category', None)
+        else:
+            context.user_data['marketplace_filter_category'] = category
+        # Refresh product list with new filter
+        await list_products(update, context)
+    except Exception as e:
+        logger.error(f"Error in marketplace_filter_category_handler: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
 
-    if query.from_user.id == seller_id:
-        await query.edit_message_text("Du kannst dein eigenes Produkt nicht kaufen.", reply_markup=await get_marketplace_menu_keyboard(context))
+async def list_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        category = context.user_data.get('marketplace_filter_category')
+        products = get_all_active_products(category)
+        if not products:
+            await query.edit_message_text("Keine Produkte gefunden.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return
+        text = "Verfügbare Produkte:\n\n"
+        keyboard_buttons = []
+        for p_id, seller_id, name, description, price, currency, file_path, status in products:
+            text += f"▪️ {name} ({price:.2f} {currency})\n"
+            keyboard_buttons.append([InlineKeyboardButton(name, callback_data=f"view_product_{p_id}")])
+        keyboard_buttons.append([InlineKeyboardButton("Zurück", callback_data="marketplace_menu")])
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard_buttons))
+    except Exception as e:
+        logger.error(f"Error in list_products: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
+
+async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        product_id = int(query.data.split('_')[-1])
+        product = get_product_by_id(product_id)
+
+        if not product:
+            await query.edit_message_text("Produkt nicht gefunden oder nicht verfügbar.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return
+
+        p_id, seller_id, name, description, price, currency, file_path, status = product
+
+        fee_amount = price * 0.01
+        total_price = price + fee_amount
+
+        product_text = (
+            f"**{name}**\n\n"
+            f"Beschreibung: {description}\n"
+            f"Preis: {price:.2f} {currency}\n"
+            f"Gebühr: {fee_amount:.2f} {currency} (1%)\n"
+            f"Gesamtpreis: {total_price:.2f} {currency}\n\n"
+            f"Verkäufer: Nutzer {seller_id}\n"
+        )
+
+        if query.from_user.id == seller_id:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Dein Produkt", callback_data='ignore')],
+                [InlineKeyboardButton("Zurück", callback_data='marketplace_view_products')]
+            ])
+        else:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"Kaufen für {total_price:.2f} {currency}", callback_data=f"buy_product_confirm_{p_id}")],
+                [InlineKeyboardButton("Zurück", callback_data='marketplace_view_products')]
+            ])
+
+        context.user_data['marketplace_selected_product_id'] = p_id
+        await query.edit_message_text(product_text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Error in view_product: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
+
+async def confirm_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        product_id = int(query.data.split('_')[-1])
+
+        product = get_product_by_id(product_id)
+        if not product:
+            await query.edit_message_text("Produkt nicht gefunden oder nicht verfügbar.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return ConversationHandler.END
+
+        p_id, seller_id, name, description, price, currency, file_path, status = product
+
+        if query.from_user.id == seller_id:
+            await query.edit_message_text("Du kannst dein eigenes Produkt nicht kaufen.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return ConversationHandler.END
+
+        buyer_id = query.from_user.id
+        buyer_balance = get_user_internal_balance(buyer_id)
+        fee_amount = price * 0.01
+        total_price = price + fee_amount
+
+        if buyer_balance < total_price:
+            await query.edit_message_text(f"Unzureichendes Guthaben! Dein Guthaben: {buyer_balance:.2f} SCAMCOIN. Benötigt: {total_price:.2f} SCAMCOIN.", reply_markup=await get_marketplace_menu_keyboard(context))
+            return ConversationHandler.END
+
+        success = process_transaction(
+            product_id=p_id,
+            buyer_id=buyer_id,
+            seller_id=seller_id,
+            price=price,
+            fee_percentage=0.01
+        )
+
+        if success:
+            try:
+                await context.bot.send_document(chat_id=buyer_id, document=file_path, caption=f"Dein Kauf: {name}")
+                await query.edit_message_text(f"✅ Du hast '{name}' erfolgreich gekauft für {total_price:.2f} {currency}.", reply_markup=await get_marketplace_menu_keyboard(context))
+                # Notify seller about the sale
+                await context.bot.send_message(chat_id=seller_id, text=f"🎉 Dein Produkt '{name}' wurde verkauft! Du hast {price * 0.99:.2f} {currency} erhalten.")
+                # Log affiliate sale if affiliate referrer exists
+                affiliate_referrer = context.user_data.get('affiliate_referrer')
+                if affiliate_referrer:
+                    from affiliate_tracking import log_affiliate_sale
+                    log_affiliate_sale(affiliate_referrer, name, price)
+            except Exception as e:
+                logger.error(f"Fehler beim Senden der Datei an Nutzer {buyer_id}: {e}")
+                await query.edit_message_text(f"✅ Du hast '{name}' gekauft, aber es gab ein Problem bei der Zustellung der Datei.", reply_markup=await get_marketplace_menu_keyboard(context))
+        else:
+            await query.edit_message_text("Kauf fehlgeschlagen. Bitte versuche es später erneut.", reply_markup=await get_marketplace_menu_keyboard(context))
+
         return ConversationHandler.END
-
-    buyer_id = query.from_user.id
-    buyer_balance = get_user_internal_balance(buyer_id)
-    fee_amount = price * 0.01
-    total_price = price + fee_amount
-
-    if buyer_balance < total_price:
-        await query.edit_message_text(f"Unzureichendes Guthaben! Dein Guthaben: {buyer_balance:.2f} SCAMCOIN. Benötigt: {total_price:.2f} SCAMCOIN.", reply_markup=await get_marketplace_menu_keyboard(context))
+    except Exception as e:
+        logger.error(f"Error in confirm_buy: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.", reply_markup=await get_marketplace_menu_keyboard(context))
         return ConversationHandler.END
-
-    success = process_transaction(
-        product_id=p_id,
-        buyer_id=buyer_id,
-        seller_id=seller_id,
-        price=price,
-        fee_percentage=0.01
-    )
-
-    if success:
-        try:
-            await context.bot.send_document(chat_id=buyer_id, document=file_path, caption=f"Dein Kauf: {name}")
-            await query.edit_message_text(f"✅ Du hast '{name}' erfolgreich gekauft für {total_price:.2f} {currency}.", reply_markup=await get_marketplace_menu_keyboard(context))
-            # Notify seller about the sale
-            await context.bot.send_message(chat_id=seller_id, text=f"🎉 Dein Produkt '{name}' wurde verkauft! Du hast {price * 0.99:.2f} {currency} erhalten.")
-            # Log affiliate sale if affiliate referrer exists
-            affiliate_referrer = context.user_data.get('affiliate_referrer')
-            if affiliate_referrer:
-                from affiliate_tracking import log_affiliate_sale
-                log_affiliate_sale(affiliate_referrer, name, price)
-        except Exception as e:
-            logger.error(f"Fehler beim Senden der Datei an Nutzer {buyer_id}: {e}")
-            await query.edit_message_text(f"✅ Du hast '{name}' gekauft, aber es gab ein Problem bei der Zustellung der Datei.", reply_markup=await get_marketplace_menu_keyboard(context))
-    else:
-        await query.edit_message_text("Kauf fehlgeschlagen. Bitte versuche es später erneut.", reply_markup=await get_marketplace_menu_keyboard(context))
-
-    return ConversationHandler.END
 
 async def add_product_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
