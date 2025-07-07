@@ -15,16 +15,26 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 
 async def internal_transfer_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.edit_message_text("Bitte gib die Nutzer-ID des Empfängers ein:")
+    try:
+        await update.callback_query.edit_message_text("Bitte gib die Nutzer-ID des Empfängers ein:")
+    except Exception as e:
+        logger.error(f"Error in internal_transfer_start: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.")
     return States.INTERNAL_TRANSFER_RECEIVER
 
 async def internal_transfer_receiver_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    receiver_id_text = update.message.text.strip()
-    if not receiver_id_text.isdigit():
-        await update.message.reply_text("Ungültige Nutzer-ID. Bitte gib eine gültige Zahl ein.")
+    try:
+        receiver_id_text = update.message.text.strip()
+        if not receiver_id_text.isdigit():
+            await update.message.reply_text("Ungültige Nutzer-ID. Bitte gib eine gültige Zahl ein.")
+            return States.INTERNAL_TRANSFER_RECEIVER
+        context.user_data['transfer_receiver_id'] = int(receiver_id_text)
+        await update.message.reply_text("Bitte gib den Betrag ein, den du überweisen möchtest:")
+    except Exception as e:
+        logger.error(f"Error in internal_transfer_receiver_handler: {e}")
+        await update.message.reply_text("Ein Fehler ist aufgetreten. Bitte versuche es später erneut.")
         return States.INTERNAL_TRANSFER_RECEIVER
-    context.user_data['transfer_receiver_id'] = int(receiver_id_text)
-    await update.message.reply_text("Bitte gib den Betrag ein, den du überweisen möchtest:")
     return States.INTERNAL_TRANSFER_AMOUNT
 
 async def internal_transfer_amount_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -97,50 +107,74 @@ async def my_wallets_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=await get_my_wallets_menu_keyboard(context))
 
 async def add_wallet_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.edit_message_text("Gib die Währung der Wallet ein (z.B. BTC, ETH):")
+    try:
+        await update.callback_query.edit_message_text("Gib die Währung der Wallet ein (z.B. BTC, ETH):")
+    except Exception as e:
+        logger.error(f"Error in add_wallet_start: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.")
     return States.ADD_WALLET_CURRENCY
 
 async def add_wallet_currency_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['wallet_currency'] = update.message.text.strip().upper()
-    await update.message.reply_text(f"Gib nun die Wallet-Adresse für **{context.user_data['wallet_currency']}** ein:")
+    try:
+        context.user_data['wallet_currency'] = update.message.text.strip().upper()
+        await update.message.reply_text(f"Gib nun die Wallet-Adresse für **{context.user_data['wallet_currency']}** ein:")
+    except Exception as e:
+        logger.error(f"Error in add_wallet_currency_handler: {e}")
+        await update.message.reply_text("Ein Fehler ist aufgetreten. Bitte versuche es später erneut.")
+        return States.ADD_WALLET_CURRENCY
     return States.ADD_WALLET_ADDRESS
 
 async def add_wallet_address_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    address = update.message.text.strip()
-    currency = context.user_data.pop('wallet_currency')
-    user_id = update.effective_user.id
-    if add_user_wallet(user_id, currency, address):
-        # Log wallet addition as a transaction
-        log_wallet_transaction(user_id, currency, 0.0, 'add_wallet', f'Added wallet {address}')
-        await update.message.reply_text(f"✅ Wallet für **{currency}** wurde hinzugefügt!", parse_mode=ParseMode.MARKDOWN)
-    else:
-        await update.message.reply_text("❌ Fehler: Diese Wallet existiert bereits.")
-    await my_wallets_menu(update, context)
+    try:
+        address = update.message.text.strip()
+        currency = context.user_data.pop('wallet_currency')
+        user_id = update.effective_user.id
+        if add_user_wallet(user_id, currency, address):
+            # Log wallet addition as a transaction
+            log_wallet_transaction(user_id, currency, 0.0, 'add_wallet', f'Added wallet {address}')
+            await update.message.reply_text(f"✅ Wallet für **{currency}** wurde hinzugefügt!", parse_mode=ParseMode.MARKDOWN)
+        else:
+            await update.message.reply_text("❌ Fehler: Diese Wallet existiert bereits.")
+        await my_wallets_menu(update, context)
+    except Exception as e:
+        logger.error(f"Error in add_wallet_address_handler: {e}")
+        await update.message.reply_text("Ein Fehler ist aufgetreten. Bitte versuche es später erneut.")
     return ConversationHandler.END
 
 async def remove_wallet_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    wallets = get_user_wallets(query.from_user.id)
-    if not wallets:
-        await query.answer("Du hast keine Wallets zum Entfernen.", show_alert=True)
-        return ConversationHandler.END
-    keyboard = [[InlineKeyboardButton(f"{currency}: {address[:10]}...", callback_data=f"del_wallet_{wid}")] for wid, currency, address in wallets]
-    keyboard.append([InlineKeyboardButton("Abbrechen", callback_data="cancel_action")])
-    await query.edit_message_text("Wähle die Wallet zum Entfernen:", reply_markup=InlineKeyboardMarkup(keyboard))
+    try:
+        query = update.callback_query
+        wallets = get_user_wallets(query.from_user.id)
+        if not wallets:
+            await query.answer("Du hast keine Wallets zum Entfernen.", show_alert=True)
+            return ConversationHandler.END
+        keyboard = [[InlineKeyboardButton(f"{currency}: {address[:10]}...", callback_data=f"del_wallet_{wid}")] for wid, currency, address in wallets]
+        keyboard.append([InlineKeyboardButton("Abbrechen", callback_data="cancel_action")])
+        await query.edit_message_text("Wähle die Wallet zum Entfernen:", reply_markup=InlineKeyboardMarkup(keyboard))
+    except Exception as e:
+        logger.error(f"Error in remove_wallet_start: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.")
     return States.REMOVE_WALLET_SELECT
 
 async def remove_wallet_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if query.data == "cancel_action":
+    try:
+        query = update.callback_query
+        if query.data == "cancel_action":
+            await my_wallets_menu(query, context)
+            return ConversationHandler.END
+        wallet_id = int(query.data.replace("del_wallet_", ""))
+        user_id = query.from_user.id
+        if remove_user_wallet(wallet_id, user_id):
+            # Log wallet removal as a transaction
+            log_wallet_transaction(user_id, '', 0.0, 'remove_wallet', f'Removed wallet id {wallet_id}')
+            await query.answer("Wallet entfernt.", show_alert=True)
+        else:
+            await query.answer("Fehler beim Entfernen.", show_alert=True)
         await my_wallets_menu(query, context)
-        return ConversationHandler.END
-    wallet_id = int(query.data.replace("del_wallet_", ""))
-    user_id = query.from_user.id
-    if remove_user_wallet(wallet_id, user_id):
-        # Log wallet removal as a transaction
-        log_wallet_transaction(user_id, '', 0.0, 'remove_wallet', f'Removed wallet id {wallet_id}')
-        await query.answer("Wallet entfernt.", show_alert=True)
-    else:
-        await query.answer("Fehler beim Entfernen.", show_alert=True)
-    await my_wallets_menu(query, context)
+    except Exception as e:
+        logger.error(f"Error in remove_wallet_select_handler: {e}")
+        if update.callback_query:
+            await update.callback_query.edit_message_text("Ein Fehler ist aufgetreten.")
     return ConversationHandler.END
